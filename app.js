@@ -7,7 +7,7 @@ const glucoseFileName = document.getElementById('glucoseFileName');
 const notesFileName = document.getElementById('notesFileName');
 
 // DTOs
-class GlucoseData {
+class GlucoseRawData {
     constructor(timestamp, rate) {
         this.timestamp = timestamp;
         this.rate = rate;
@@ -19,6 +19,15 @@ class NoteData {
         this.timestamp = timestamp;
         this.note = note;
         this.details = details;
+    }
+}
+
+class GlucoseFullData {
+    constructor(timestamp, glucoseData = null, noteData = null) {
+        this.timestamp = timestamp;
+        this.glucoseRate = glucoseData ? glucoseData.rate : null;
+        this.note = noteData ? noteData.note : null;
+        this.details = noteData ? noteData.details : null;
     }
 }
 
@@ -55,19 +64,19 @@ async function handleParse() {
     try {
         parseBtn.disabled = true;
         parseBtn.textContent = 'Parsing...';
-        
+
         // Parse both files in parallel
         const [glucoseData, notesData] = await Promise.all([
             parseGlucoseCSV(glucoseFile),
             parseNotesCSV(notesFile)
         ]);
 
+        // Join the data by timestamp
+        const joinedData = joinDataByTimestamp(glucoseData, notesData);
+
         // Display results
-        output.textContent = JSON.stringify({
-            glucoseData: glucoseData,
-            notesData: notesData
-        }, null, 2);
-        
+        output.textContent = JSON.stringify(joinedData, null, 2);
+
     } catch (error) {
         console.error('Error parsing files:', error);
         output.textContent = `Error: ${error.message}`;
@@ -97,27 +106,27 @@ async function parseGlucoseCSV(file) {
                 }
 
                 const result = [];
-                
+
                 for (let i = 2; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
-                    
+
                     const values = lines[i].split(',').map(v => v.trim());
                     const timestamp = values[timestampIndex];
-                    
+
                     // Get rate from Historic Glucose or fallback to Scan Glucose
-                    let rate = '';
+                    let rate = null;
                     if (values[historicGlucoseIndex]) {
-                        rate = parseInt(values[historicGlucoseIndex], 10);
+                        rate = parseFloat(values[historicGlucoseIndex]);
                     } else if (values[scanGlucoseIndex]) {
-                        rate = parseInt(values[scanGlucoseIndex], 10);
+                        rate = parseFloat(values[scanGlucoseIndex]);
                     }
-                    
-                    // Skip if no rate is available
-                    if (!rate || isNaN(rate) || !timestamp) continue;
-                    
-                    result.push(new GlucoseData(timestamp, rate));
+
+                    // Skip if no valid rate is available
+                    if (rate === null || isNaN(rate) || !timestamp) continue;
+
+                    result.push(new GlucoseRawData(timestamp, rate));
                 }
-                
+
                 resolve(result);
             } catch (error) {
                 reject(error);
@@ -137,32 +146,32 @@ async function parseNotesCSV(file) {
                 const lines = csv.split('\n');
                 const headers = lines[0].split(';').map(h => h.trim());
                 console.log("notes headers", headers.join('\n'));
-                
+
                 const timestampIndex = headers.indexOf('timestamp');
                 const noteIndex = headers.indexOf('note');
                 const detailsIndex = headers.indexOf('details');
                 console.log("parsed indexes: ", timestampIndex, noteIndex, detailsIndex);
-                
+
                 if (timestampIndex === -1 || noteIndex === -1 || detailsIndex === -1) {
                     throw new Error('Invalid CSV format for notes data');
                 }
 
                 const result = [];
-                
+
                 for (let i = 1; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
-                    
+
                     // Handle quoted values that might contain semicolons
                     const values = lines[i].match(/[^;]+|([^;]*"[^"]*"[^;]*)/g) || [];
                     const timestamp = values[timestampIndex]?.trim();
                     const note = values[noteIndex]?.trim();
                     const details = values[detailsIndex]?.trim();
-                    
+
                     if (timestamp && (note || details)) {
                         result.push(new NoteData(timestamp, note, details));
                     }
                 }
-                
+
                 resolve(result);
             } catch (error) {
                 reject(error);
@@ -171,4 +180,34 @@ async function parseNotesCSV(file) {
         reader.onerror = () => reject(new Error('Error reading file'));
         reader.readAsText(file);
     });
+}
+
+function joinDataByTimestamp(glucoseData, notesData) {
+    // Create a map to store data by timestamp
+    const resultMap = new Map();
+
+    // Add all glucose data to the map
+    for (const glucose of glucoseData) {
+        resultMap.set(glucose.timestamp, new GlucoseFullData(glucose.timestamp, glucose, null));
+    }
+
+    // Add or update with notes data
+    for (const note of notesData) {
+        if (resultMap.has(note.timestamp)) {
+            // Update existing entry with notes
+            const existing = resultMap.get(note.timestamp);
+            resultMap.set(note.timestamp, new GlucoseFullData(
+                note.timestamp,
+                { rate: existing.glucoseRate },
+                note
+            ));
+        } else {
+            // Add new entry with just notes
+            resultMap.set(note.timestamp, new GlucoseFullData(note.timestamp, null, note));
+        }
+    }
+
+    // Convert map to array and sort by timestamp
+    return Array.from(resultMap.values())
+        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
