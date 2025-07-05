@@ -1,25 +1,21 @@
 plugins {
-    kotlin("js") version "1.5.31"
+    kotlin("js") version "1.9.0"
 }
-
-group = "com.example"
-version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    implementation(kotlin("stdlib-js"))
-}
-
 kotlin {
-    js(LEGACY) {
+    js(IR) {
+        binaries.executable()
         browser {
-            binaries.executable()
-            webpackTask {
-                cssSupport.enabled = true
-            }
         }
     }
+}
+
+dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-html-js:0.9.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }
