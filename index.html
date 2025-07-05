@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Parser</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .upload-section {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .upload-section:hover {
+            border-color: #4a90e2;
+            background-color: #f8f9fa;
+        }
+        .file-input {
+            display: none;
+        }
+        .file-label {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #4a90e2;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .file-label:hover {
+            background-color: #357abd;
+        }
+        .file-name {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 100px;
+            background-color: #f9f9f9;
+        }
+        .parse-btn {
+            padding: 12px 24px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .parse-btn:hover {
+            background-color: #218838;
+        }
+        .parse-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CSV Parser</h1>
+        
+        <div class="upload-section">
+            <h2>Glucose Data (CSV)</h2>
+            <input type="file" id="glucoseFile" class="file-input" accept=".csv">
+            <label for="glucoseFile" class="file-label">Choose Glucose Data File</label>
+            <div id="glucoseFileName" class="file-name">No file chosen</div>
+        </div>
+
+        <div class="upload-section">
+            <h2>Notes Data (CSV)</h2>
+            <input type="file" id="notesFile" class="file-input" accept=".csv">
+            <label for="notesFile" class="file-label">Choose Notes Data File</label>
+            <div id="notesFileName" class="file-name">No file chosen</div>
+        </div>
+
+        <button id="parseBtn" class="parse-btn" disabled>Parse Files</button>
+
+        <div class="results">
+            <h3>Parsed Data:</h3>
+            <pre id="output"></pre>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
