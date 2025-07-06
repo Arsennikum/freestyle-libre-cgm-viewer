@@ -108,29 +108,32 @@ async function parseGlucoseCSV(file) {
                     throw new Error('Invalid CSV format for glucose data');
                 }
 
-                const result = [];
+                // Deduplicate by timestamp, keeping the first Historic Glucose mmol/L if available
+                const resultMap = new Map();
 
                 for (let i = 2; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
 
                     const values = lines[i].split(',').map(v => v.trim());
-                    const timestamp = values[timestampIndex];
+                    const timestampStr = values[timestampIndex];
+                    if (!timestampStr) continue;
+                    const timestamp = toDate(timestampStr);
 
-                    // Get rate from Historic Glucose or fallback to Scan Glucose
+                    // If already have a value for this timestamp, skip unless this is the first Historic Glucose
+                    if (resultMap.has(timestamp.getTime())) continue;
+
                     let rate = null;
                     if (values[historicGlucoseIndex]) {
                         rate = parseFloat(values[historicGlucoseIndex]);
                     } else if (values[scanGlucoseIndex]) {
                         rate = parseFloat(values[scanGlucoseIndex]);
                     }
+                    if (rate === null || isNaN(rate)) continue;
 
-                    // Skip if no valid rate is available
-                    if (rate === null || isNaN(rate) || !timestamp) continue;
-
-                    result.push(new GlucoseRawData(toDate(timestamp), rate));
+                    resultMap.set(timestamp.getTime(), new GlucoseRawData(timestamp, rate));
                 }
 
-                resolve(result);
+                resolve(Array.from(resultMap.values()));
             } catch (error) {
                 reject(error);
             }
@@ -270,7 +273,6 @@ function renderChart(data) {
         console.log(item.time);
     });
 
-    chartData = chartData.slice(1,9); // todo fixme - remove doubles in data
     // Set the data
     glucoseSeries.setData(chartData);
 
