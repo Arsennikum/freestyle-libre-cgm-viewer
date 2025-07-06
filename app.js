@@ -325,6 +325,16 @@ function renderChart(data) {
         title: 'Hyper',
     });
 
+    // Add price line at 7.8 mmol/L - medium threshold (not more than 1 hour in a day)
+    glucoseSeries.createPriceLine({
+        price: 7.8,
+        color: '#ffc300',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Medium',
+    });
+
     // Handle window resize
     const resizeObserver = new ResizeObserver(entries => {
         if (entries.length === 0 || entries[0].target !== chartElement) {
