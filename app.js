@@ -74,8 +74,11 @@ async function handleParse() {
         // Join the data by timestamp
         const joinedData = joinDataByTimestamp(glucoseData, notesData);
 
-        // Display results
+        // Display results (hidden by default)
         output.textContent = JSON.stringify(joinedData, null, 2);
+        
+        // Render the chart
+        renderChart(joinedData);
 
     } catch (error) {
         console.error('Error parsing files:', error);
@@ -124,7 +127,7 @@ async function parseGlucoseCSV(file) {
                     // Skip if no valid rate is available
                     if (rate === null || isNaN(rate) || !timestamp) continue;
 
-                    result.push(new GlucoseRawData(timestamp, rate));
+                    result.push(new GlucoseRawData(toDate(timestamp), rate));
                 }
 
                 resolve(result);
@@ -168,7 +171,7 @@ async function parseNotesCSV(file) {
                     const details = values[detailsIndex]?.trim();
 
                     if (timestamp && (note || details)) {
-                        result.push(new NoteData(timestamp, note, details));
+                        result.push(new NoteData(toDate(timestamp), note, details));
                     }
                 }
 
@@ -209,5 +212,191 @@ function joinDataByTimestamp(glucoseData, notesData) {
 
     // Convert map to array and sort by timestamp
     return Array.from(resultMap.values())
-        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function renderChart(data) {
+    // Create the chart
+    const chartElement = document.getElementById('chart');
+    chartElement.innerHTML = ''; // Clear previous chart if any
+
+    const chart = LightweightCharts.createChart(chartElement, {
+        width: chartElement.clientWidth,
+        height: 500,
+        layout: {
+            backgroundColor: '#ffffff',
+            textColor: '#333',
+        },
+        grid: {
+            vertLines: {
+                color: '#f0f0f0',
+            },
+            horzLines: {
+                color: '#f0f0f0',
+            },
+        },
+        rightPriceScale: {
+            borderColor: '#e0e0e0',
+        },
+        timeScale: {
+            borderColor: '#e0e0e0',
+            timeVisible: true,
+            secondsVisible: false,
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+    });
+
+    // Add glucose line series
+    const glucoseSeries = chart.addLineSeries({
+        color: '#4a90e2',
+        lineWidth: 2,
+        crosshairMarkerVisible: true,
+        lastValueVisible: true,
+        priceLineVisible: true,
+    });
+
+    // Prepare data for the chart
+    let chartData = data
+        .filter(item => item.glucoseRate !== null)
+        .map(item => ({
+            time: item.timestamp.getTime() / 1000, // Convert to seconds for Lightweight Charts
+            value: item.glucoseRate,
+        }));
+
+    chartData.forEach(item => {
+        console.log("item", item);
+        console.log(item.time);
+    });
+
+    chartData = chartData.slice(1,9); // todo fixme - remove doubles in data
+    // Set the data
+    glucoseSeries.setData(chartData);
+
+    // Add markers for notes
+    const markers = data
+        .filter(item => item.note || item.details)
+        .map(item => ({
+            time: item.timestamp.getTime() / 1000, // Convert to seconds for Lightweight Charts
+            position: 'belowBar',
+            color: '#f68410',
+            shape: 'arrowUp',
+            text: item.note || 'Note',
+        }));
+
+    markers.forEach(item => {
+        console.log("item", item);
+        console.log(item.time);
+    });
+
+
+    glucoseSeries.setMarkers(markers);
+
+    // Add price line at 5.5 mmol/L (100 mg/dL) - common target range
+    glucoseSeries.createPriceLine({
+        price: 5.5,
+        color: '#4caf50',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Target',
+    });
+
+    // Add price line at 3.9 mmol/L (70 mg/dL) - hypoglycemia threshold
+    glucoseSeries.createPriceLine({
+        price: 3.9,
+        color: '#f44336',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Hypo',
+    });
+
+    // Add price line at 10 mmol/L (180 mg/dL) - hyperglycemia threshold
+    glucoseSeries.createPriceLine({
+        price: 10,
+        color: '#f44336',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Hyper',
+    });
+
+    // Handle window resize
+    const resizeObserver = new ResizeObserver(entries => {
+        if (entries.length === 0 || entries[0].target !== chartElement) {
+            return;
+        }
+        const newRect = entries[0].contentRect;
+        chart.applyOptions({ width: newRect.width });
+    });
+
+    resizeObserver.observe(chartElement);
+
+    // Show tooltip on hover
+    const toolTip = document.createElement('div');
+    toolTip.className = 'chart-tooltip';
+    chartElement.appendChild(toolTip);
+
+    chart.subscribeCrosshairMove(param => {
+        if (param.point === undefined || !param.time || param.point.x < 0 || param.point.x > chartElement.clientWidth || param.point.y < 0 || param.point.y > chartElement.clientHeight) {
+            toolTip.style.display = 'none';
+            return;
+        }
+
+        const data = param.seriesData.get(glucoseSeries);
+        if (!data) return;
+
+        toolTip.style.display = 'block';
+        toolTip.innerHTML = `
+            <div>Time: ${new Date(param.time).toLocaleString()}</div>
+            <div>Glucose: ${data.value.toFixed(1)} mmol/L</div>
+        `;
+
+        const toolTipWidth = toolTip.offsetWidth;
+        const toolTipHeight = toolTip.offsetHeight;
+        const left = param.point.x + 20;
+        const top = param.point.y + 20;
+
+        toolTip.style.left = left + 'px';
+        toolTip.style.top = top + 'px';
+    });
+
+    // Add styles for tooltip
+    const style = document.createElement('style');
+    style.textContent = `
+        .chart-tooltip {
+            position: absolute;
+            display: none;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            pointer-events: none;
+            z-index: 1000;
+            font-size: 12px;
+            color: #333;
+        }
+        .chart-tooltip div {
+            margin: 4px 0;
+        }
+    `;
+    document.head.appendChild(style);
+
+    chart.timeScale().fitContent();
+}
+
+function toDate(dateString) {
+// Разбиваем
+
+    const [datePart, timePart] = dateString.split(' ');
+    const [day, month, year] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+
+// month - 1, так как в JS месяцы с 0 начинаются
+    const jsDate = new Date(year, month - 1, day, hours, minutes);
+
+    return jsDate;
 }
