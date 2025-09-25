@@ -38,10 +38,32 @@ notesFileInput.addEventListener('change', handleFileSelect);
 parseBtn.addEventListener('click', handleParse);
 downloadBtn.addEventListener('click', handleDownload);
 
+// Level configuration elements
+const saveLevelsBtn = document.getElementById('saveLevelsBtn');
+const resetLevelsBtn = document.getElementById('resetLevelsBtn');
+const hypoLevelInput = document.getElementById('hypoLevel');
+const targetLevelInput = document.getElementById('targetLevel');
+const mediumLevelInput = document.getElementById('mediumLevel');
+const hyperLevelInput = document.getElementById('hyperLevel');
+
+saveLevelsBtn.addEventListener('click', saveLevels);
+resetLevelsBtn.addEventListener('click', resetLevels);
+
 // Track selected files and parsed data
 let glucoseFile = null;
 let notesFile = null;
 let joinedData = null;
+
+// Default glucose level settings (mmol/L)
+const DEFAULT_LEVELS = {
+    hypo: 3.9,    // Hypoglycemia threshold
+    target: 5.5,  // Target level
+    medium: 7.8,  // Medium threshold (not more than 1 hour in a day)
+    hyper: 10.0   // Hyperglycemia threshold
+};
+
+// Current glucose levels (loaded from localStorage or defaults)
+let currentLevels = { ...DEFAULT_LEVELS };
 
 function handleFileSelect(event) {
     const file = event.target.files[0];
@@ -325,9 +347,10 @@ function renderChart(data) {
 
     glucoseSeries.setMarkers(markers);
 
-    // Add price line at 5.5 mmol/L (100 mg/dL) - common target range
+    // Add configurable lines
+    // Target level (green)
     glucoseSeries.createPriceLine({
-        price: 5.5,
+        price: currentLevels.target,
         color: '#4caf50',
         lineWidth: 1,
         lineStyle: LightweightCharts.LineStyle.Dashed,
@@ -335,9 +358,9 @@ function renderChart(data) {
         title: 'Target',
     });
 
-    // Add price line at 3.9 mmol/L (70 mg/dL) - hypoglycemia threshold
+    // Hypoglycemia threshold (red)
     glucoseSeries.createPriceLine({
-        price: 3.9,
+        price: currentLevels.hypo,
         color: '#f44336',
         lineWidth: 1,
         lineStyle: LightweightCharts.LineStyle.Dashed,
@@ -345,9 +368,9 @@ function renderChart(data) {
         title: 'Hypo',
     });
 
-    // Add price line at 10 mmol/L (180 mg/dL) - hyperglycemia threshold
+    // Hyperglycemia threshold (red)
     glucoseSeries.createPriceLine({
-        price: 10,
+        price: currentLevels.hyper,
         color: '#f44336',
         lineWidth: 1,
         lineStyle: LightweightCharts.LineStyle.Dashed,
@@ -355,9 +378,9 @@ function renderChart(data) {
         title: 'Hyper',
     });
 
-    // Add price line at 7.8 mmol/L - medium threshold (not more than 1 hour in a day)
+    // Medium threshold (yellow)
     glucoseSeries.createPriceLine({
-        price: 7.8,
+        price: currentLevels.medium,
         color: '#ffc300',
         lineWidth: 1,
         lineStyle: LightweightCharts.LineStyle.Dashed,
@@ -509,3 +532,79 @@ function convertToCSV(data) {
     // Convert to CSV string
     return csvLines.map(row => row.join(',')).join('\n');
 }
+
+// Level configuration functions
+function loadLevels() {
+    try {
+        const savedLevels = localStorage.getItem('glucoseLevels');
+        if (savedLevels) {
+            currentLevels = { ...DEFAULT_LEVELS, ...JSON.parse(savedLevels) };
+        }
+    } catch (error) {
+        console.warn('Failed to load saved glucose levels:', error);
+        currentLevels = { ...DEFAULT_LEVELS };
+    }
+    updateLevelInputs();
+}
+
+function saveLevels() {
+    const levels = {
+        hypo: parseFloat(hypoLevelInput.value),
+        target: parseFloat(targetLevelInput.value),
+        medium: parseFloat(mediumLevelInput.value),
+        hyper: parseFloat(hyperLevelInput.value)
+    };
+
+    // Validate levels
+    if (Object.values(levels).some(level => isNaN(level) || level <= 0)) {
+        alert('Please enter valid positive numbers for all glucose levels.');
+        return;
+    }
+
+    // Save to localStorage and update current levels
+    try {
+        localStorage.setItem('glucoseLevels', JSON.stringify(levels));
+        currentLevels = levels;
+
+        // Re-render chart if data is available
+        if (joinedData) {
+            renderChart(joinedData);
+        }
+
+        alert('✅ Glucose level settings saved successfully!');
+    } catch (error) {
+        console.error('Failed to save glucose levels:', error);
+        alert('❌ Failed to save settings. Please try again.');
+    }
+}
+
+function resetLevels() {
+    if (confirm('Reset glucose levels to default values?')) {
+        currentLevels = { ...DEFAULT_LEVELS };
+        updateLevelInputs();
+
+        // Clear from localStorage
+        try {
+            localStorage.removeItem('glucoseLevels');
+        } catch (error) {
+            console.warn('Failed to clear saved levels:', error);
+        }
+
+        // Re-render chart if data is available
+        if (joinedData) {
+            renderChart(joinedData);
+        }
+
+        alert('🔄 Glucose levels reset to defaults!');
+    }
+}
+
+function updateLevelInputs() {
+    hypoLevelInput.value = currentLevels.hypo.toFixed(1);
+    targetLevelInput.value = currentLevels.target.toFixed(1);
+    mediumLevelInput.value = currentLevels.medium.toFixed(1);
+    hyperLevelInput.value = currentLevels.hyper.toFixed(1);
+}
+
+// Initialize levels on page load
+document.addEventListener('DOMContentLoaded', loadLevels);
