@@ -67,19 +67,34 @@ let currentLevels = { ...DEFAULT_LEVELS };
 
 function handleFileSelect(event) {
     const file = event.target.files[0];
-    if (!file) return;
 
     if (event.target.id === 'glucoseFile') {
-        glucoseFile = file;
-        glucoseFileName.textContent = file.name;
+        if (file) {
+            glucoseFile = file;
+            glucoseFileName.textContent = file.name;
+        } else {
+            // User cancelled file selection - keep previous file if any
+            if (!glucoseFile) {
+                glucoseFileName.textContent = 'No file chosen';
+            }
+        }
     } else {
-        notesFile = file;
-        notesFileName.textContent = file.name;
+        if (file) {
+            notesFile = file;
+            notesFileName.textContent = file.name;
+        } else {
+            // User cancelled file selection - keep previous file if any
+            if (!notesFile) {
+                notesFileName.textContent = 'No file chosen';
+            }
+        }
     }
 
     // Enable parse button only when both files are selected
     if (glucoseFile && notesFile) {
         parseBtn.disabled = false;
+    } else {
+        parseBtn.disabled = true;
     }
 }
 
