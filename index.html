@@ -98,12 +98,169 @@
             color: #2c3e50;
             margin-top: 0;
         }
+        .instructions {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .instructions h3 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .instructions ol, .instructions ul {
+            margin-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        .example-files {
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .download-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+            margin-bottom: 5px;
+            transition: background-color 0.3s;
+        }
+        .download-link:hover {
+            background-color: #0056b3;
+        }
+        .collapsible {
+            background-color: #ffffff;
+            color: #333;
+            cursor: pointer;
+            padding: 12px;
+            width: 100%;
+            border: 1px solid #ddd;
+            text-align: left;
+            outline: none;
+            font-size: 16px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+        }
+        .collapsible:hover, .collapsible.active {
+            background-color: #f1f1f1;
+        }
+        .collapsible:after {
+            content: '\25B6';
+            font-weight: bold;
+            float: right;
+            transition: transform 0.3s;
+        }
+        .collapsible.active:after {
+            transform: rotate(90deg);
+        }
+        .content {
+            padding: 0 15px;
+            display: none;
+            overflow: hidden;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+        }
+        .content.show {
+            display: block;
+            padding: 15px;
+        }
+        .prompt-box {
+            background-color: #f4f4f4;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            border-radius: 0 4px 4px 0;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
-        <h1>CSV Parser</h1>
-        
+        <h1>Glucose Level Tracker</h1>
+
+        <div class="instructions">
+            <h3>📋 How to Use This Tool</h3>
+
+            <div class="example-files">
+                <h4>🚀 Quick Start - Download Example Files:</h4>
+                <p>Try the app with sample data:</p>
+                <a href="example_glucose.csv" download class="download-link">📊 Example Glucose Data</a>
+                <a href="notes_example.csv" download class="download-link">📝 Example Notes Data</a>
+            </div>
+
+            <button type="button" class="collapsible">📥 How to Export Your Glucose Data from LibreView</button>
+            <div class="content">
+                <ol>
+                    <li>Log in to your <a href="https://www.libreview.com/" target="_blank" rel="noopener">LibreView account</a> using your credentials</li>
+                    <li>Navigate to the <strong>Glucose History</strong> section from the top left of the page</li>
+                    <li>Click the <strong>"Download Glucose Data"</strong> button at the top right of the Glucose History page</li>
+                    <li>Complete the reCAPTCHA confirmation to prove you are not a robot</li>
+                    <li>Click the <strong>Download</strong> button in the pop-up window to start downloading your glucose data as a .csv file</li>
+                    <li>The .csv file will be saved on your device for analysis</li>
+                </ol>
+                <p><strong>Note:</strong> This tool supports both <em>mg/dL</em> and <em>mmol/L</em> glucose units. Data in mg/dL will be automatically converted to mmol/L for visualization.</p>
+            </div>
+
+            <button type="button" class="collapsible">📝 How to Create Notes CSV from Your Messages</button>
+            <div class="content">
+                <p>If you track your activities in a messenger app (like Telegram), you can convert them to a structured CSV file using AI:</p>
+
+                <h4>Step 1: Copy your messages</h4>
+                <p>Export or copy your daily notes and activities from your messenger app.</p>
+
+                <h4>Step 2: Use this AI prompt</h4>
+                <div class="prompt-box">Convert the following messenger messages into **CSV** with the format:
+`DD-MM-YYYY HH:MM;note;details`
+Use `;` as a delimiter.
+Column headers must be:
+
+```
+timestamp;note;details
+```
+
+**Rules:**
+1. If the short summary (`note`) is the same as the full text, leave the `details` field empty.
+2. If the message contains a time inside the text, use that time instead of the message timestamp.
+3. If the message contains multiple activities, split them into multiple rows. If relative times are given, calculate them.
+4. Assume the message is written **at the end of the activity**, unless the wording clearly shows otherwise.
+5. Summarize each activity in 2–3 words for the `note` field, keep the full description in `details`.
+6. Output only valid CSV, no explanations.
+
+**Example input:**
+```
+Alexey S, [6/29/25 9:38 AM]
+Workout 15 min (lifting medium-power), calm 10 min, sitting down to eat
+
+Alexey S, [6/29/25 9:38 AM]
+Breakfast: Long-cooked oatmeal, hummus, avocado
+```
+
+**Example output:**
+```
+timestamp;note;details
+29-06-2025 09:13;Workout;Lifting medium-power
+29-06-2025 09:28;Rest;Calm 10 min
+29-06-2025 09:38;Breakfast;Long-cooked oatmeal, hummus, avocado
+```</div>
+
+                <h4>Step 3: Save as CSV</h4>
+                <p>Copy the AI output and save it as a .csv file, then upload it to this tool along with your glucose data.</p>
+            </div>
+        </div>
+
         <div class="upload-section">
             <h2>Glucose Data (CSV)</h2>
             <input type="file" id="glucoseFile" class="file-input" accept=".csv">
@@ -131,5 +288,24 @@
     </div>
 
     <script src="app.js"></script>
+    <script>
+        // Handle collapsible sections
+        document.addEventListener('DOMContentLoaded', function() {
+            const collapsibles = document.getElementsByClassName('collapsible');
+
+            for (let i = 0; i < collapsibles.length; i++) {
+                collapsibles[i].addEventListener('click', function() {
+                    this.classList.toggle('active');
+                    const content = this.nextElementSibling;
+
+                    if (content.classList.contains('show')) {
+                        content.classList.remove('show');
+                    } else {
+                        content.classList.add('show');
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
