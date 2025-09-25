@@ -247,6 +247,12 @@ function renderChart(data) {
     const chartElement = document.getElementById('chart');
     chartElement.innerHTML = ''; // Clear previous chart if any
 
+    // Add chart title
+    const titleElement = document.createElement('div');
+    titleElement.style.cssText = 'text-align: center; margin-bottom: 15px; color: #2c3e50; font-size: 20px; font-weight: bold;';
+    titleElement.innerHTML = '📊 Glucose Level Chart';
+    chartElement.appendChild(titleElement);
+
     const chart = LightweightCharts.createChart(chartElement, {
         width: chartElement.clientWidth,
         height: 500,

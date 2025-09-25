@@ -184,6 +184,26 @@
             white-space: pre-wrap;
             border-radius: 0 4px 4px 0;
         }
+        .chart-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: #666;
+            padding: 60px 20px;
+        }
+        .chart-placeholder h3 {
+            margin: 0 0 15px 0;
+            color: #4a90e2;
+            font-size: 24px;
+        }
+        .chart-placeholder p {
+            margin: 0;
+            line-height: 1.5;
+            max-width: 400px;
+        }
     </style>
 </head>
 <body>
@@ -282,7 +302,12 @@ timestamp;note;details
 
         <button id="downloadBtn" class="parse-btn" disabled style="background-color: #17a2b8; margin-left: 10px;">Download Joined CSV</button>
 
-        <div class="chart-container" id="chart"></div>
+        <div class="chart-container" id="chart">
+            <div class="chart-placeholder">
+                <h3>📊 Glucose Level Chart</h3>
+                <p>Upload your glucose data and notes files, then click "Parse Files" to view your interactive chart with glucose trends and activity markers.</p>
+            </div>
+        </div>
         
         <div class="results">
             <h3>Parsed Data:</h3>
