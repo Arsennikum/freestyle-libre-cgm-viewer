@@ -2,6 +2,7 @@
 const glucoseFileInput = document.getElementById('glucoseFile');
 const notesFileInput = document.getElementById('notesFile');
 const parseBtn = document.getElementById('parseBtn');
+const downloadBtn = document.getElementById('downloadBtn');
 const output = document.getElementById('output');
 const glucoseFileName = document.getElementById('glucoseFileName');
 const notesFileName = document.getElementById('notesFileName');
@@ -35,10 +36,12 @@ class GlucoseFullData {
 glucoseFileInput.addEventListener('change', handleFileSelect);
 notesFileInput.addEventListener('change', handleFileSelect);
 parseBtn.addEventListener('click', handleParse);
+downloadBtn.addEventListener('click', handleDownload);
 
-// Track selected files
+// Track selected files and parsed data
 let glucoseFile = null;
 let notesFile = null;
+let joinedData = null;
 
 function handleFileSelect(event) {
     const file = event.target.files[0];
@@ -72,13 +75,16 @@ async function handleParse() {
         ]);
 
         // Join the data by timestamp
-        const joinedData = joinDataByTimestamp(glucoseData, notesData);
+        joinedData = joinDataByTimestamp(glucoseData, notesData);
 
         // Display results (hidden by default)
         output.textContent = JSON.stringify(joinedData, null, 2);
-        
+
         // Render the chart
         renderChart(joinedData);
+
+        // Enable download button
+        downloadBtn.disabled = false;
 
     } catch (error) {
         console.error('Error parsing files:', error);
@@ -100,12 +106,23 @@ async function parseGlucoseCSV(file) {
                 console.log("headers", headers.join('\n'));
 
                 const timestampIndex = headers.indexOf('Device Timestamp');
-                const historicGlucoseIndex = headers.indexOf('Historic Glucose mmol/L');
-                const scanGlucoseIndex = headers.indexOf('Scan Glucose mmol/L');
-                console.log("parsed indexes: ", timestampIndex, historicGlucoseIndex, scanGlucoseIndex);
+
+                // Check for both mmol/L and mg/dL units
+                let historicGlucoseIndex = headers.indexOf('Historic Glucose mmol/L');
+                let scanGlucoseIndex = headers.indexOf('Scan Glucose mmol/L');
+                let isMgDl = false;
+
+                if (historicGlucoseIndex === -1 && scanGlucoseIndex === -1) {
+                    // Try mg/dL units
+                    historicGlucoseIndex = headers.indexOf('Historic Glucose mg/dL');
+                    scanGlucoseIndex = headers.indexOf('Scan Glucose mg/dL');
+                    isMgDl = true;
+                }
+
+                console.log("parsed indexes: ", timestampIndex, historicGlucoseIndex, scanGlucoseIndex, "isMgDl:", isMgDl);
 
                 if (timestampIndex === -1 || (historicGlucoseIndex === -1 && scanGlucoseIndex === -1)) {
-                    throw new Error('Invalid CSV format for glucose data');
+                    throw new Error('Invalid CSV format for glucose data. Expected columns: Device Timestamp and either Historic/Scan Glucose in mmol/L or mg/dL');
                 }
 
                 // Deduplicate by timestamp, keeping the first Historic Glucose mmol/L if available
@@ -129,6 +146,11 @@ async function parseGlucoseCSV(file) {
                         rate = parseFloat(values[scanGlucoseIndex]);
                     }
                     if (rate === null || isNaN(rate)) continue;
+
+                    // Convert mg/dL to mmol/L if needed (mg/dL × 0.0555 = mmol/L)
+                    if (isMgDl) {
+                        rate = rate * 0.0555;
+                    }
 
                     resultMap.set(timestamp.getTime(), new GlucoseRawData(timestamp, rate));
                 }
@@ -189,27 +211,29 @@ async function parseNotesCSV(file) {
 }
 
 function joinDataByTimestamp(glucoseData, notesData) {
-    // Create a map to store data by timestamp
+    // Create a map to store data by timestamp (using timestamp as milliseconds for proper key comparison)
     const resultMap = new Map();
 
     // Add all glucose data to the map
     for (const glucose of glucoseData) {
-        resultMap.set(glucose.timestamp, new GlucoseFullData(glucose.timestamp, glucose, null));
+        const timeKey = glucose.timestamp.getTime();
+        resultMap.set(timeKey, new GlucoseFullData(glucose.timestamp, glucose, null));
     }
 
     // Add or update with notes data
     for (const note of notesData) {
-        if (resultMap.has(note.timestamp)) {
+        const timeKey = note.timestamp.getTime();
+        if (resultMap.has(timeKey)) {
             // Update existing entry with notes
-            const existing = resultMap.get(note.timestamp);
-            resultMap.set(note.timestamp, new GlucoseFullData(
-                note.timestamp,
+            const existing = resultMap.get(timeKey);
+            resultMap.set(timeKey, new GlucoseFullData(
+                existing.timestamp, // Use existing timestamp to maintain consistency
                 { rate: existing.glucoseRate },
                 note
             ));
         } else {
             // Add new entry with just notes
-            resultMap.set(note.timestamp, new GlucoseFullData(note.timestamp, null, note));
+            resultMap.set(timeKey, new GlucoseFullData(note.timestamp, null, note));
         }
     }
 
@@ -411,4 +435,71 @@ function toDate(dateString) {
     const jsDate = new Date(year, month - 1, day, hours, minutes);
 
     return jsDate;
+}
+
+function handleDownload() {
+    if (!joinedData || joinedData.length === 0) {
+        alert('No data to download. Please parse files first.');
+        return;
+    }
+
+    // Create CSV content
+    const csvContent = convertToCSV(joinedData);
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'glucose_data_with_notes.csv');
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function convertToCSV(data) {
+    // CSV headers
+    const headers = ['Timestamp', 'Glucose Rate (mmol/L)', 'Notes'];
+
+    // Convert data to CSV rows
+    const rows = data.map(item => {
+        const timestamp = item.timestamp.toLocaleString('en-GB', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }).replace(',', '');
+
+        const glucoseRate = item.glucoseRate !== null ? item.glucoseRate : '';
+
+        // Combine note and details with colon separator
+        let notes = '';
+        if (item.note || item.details) {
+            if (item.note && item.details) {
+                notes = `${item.note}:${item.details}`;
+            } else if (item.note) {
+                notes = item.note;
+            } else if (item.details) {
+                notes = item.details;
+            }
+        }
+
+        // Escape commas and quotes in notes field
+        if (notes.includes(',') || notes.includes('"')) {
+            notes = `"${notes.replace(/"/g, '""')}"`;
+        }
+
+        return [timestamp, glucoseRate, notes];
+    });
+
+    // Combine headers and rows
+    const csvLines = [headers, ...rows];
+
+    // Convert to CSV string
+    return csvLines.map(row => row.join(',')).join('\n');
 }
