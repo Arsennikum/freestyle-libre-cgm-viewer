@@ -17,11 +17,13 @@ A web-based tool for visualizing continuous glucose monitor (CGM) data alongside
 
 ## 🚀 Quick Start
 
+**📱 For Abbott FreeStyle Libre CGM users** - This tool helps you combine your LibreView glucose data with daily notes from messengers (Telegram, WhatsApp, etc.) to visualize how activities affect your glucose levels.
+
 🌐 **Visit the app**: [https://arsennikum.github.io/freestyle-libre-cgm-viewer/](https://arsennikum.github.io/freestyle-libre-cgm-viewer/)
 
 📋 **All instructions are available on the website** - the app includes comprehensive guides for:
-- Exporting data from LibreView
-- Creating notes CSV using AI prompts
+- Exporting Abbott FreeStyle Libre data from LibreView
+- Converting messenger notes to CSV using AI prompts
 - Configuring glucose level thresholds
 
 **Or follow these steps:**

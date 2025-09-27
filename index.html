@@ -250,6 +250,52 @@
             margin: 15px 0 0 0;
             font-style: italic;
         }
+        .input-method-toggle {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .input-method-btn {
+            padding: 8px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .input-method-btn.active {
+            border-color: #4a90e2;
+            background-color: #4a90e2;
+            color: white;
+        }
+        .csv-textarea {
+            width: 100%;
+            height: 120px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+            display: none;
+        }
+        .csv-textarea:focus {
+            border-color: #4a90e2;
+            outline: none;
+        }
+        .csv-textarea::placeholder {
+            color: #999;
+        }
+        .input-section.paste-mode .csv-textarea {
+            display: block;
+        }
+        .input-section.paste-mode .file-input-wrapper {
+            display: none;
+        }
+        .file-input-wrapper {
+            display: block;
+        }
         @media (max-width: 600px) {
             .level-inputs {
                 grid-template-columns: 1fr;
@@ -262,6 +308,46 @@
             .level-input-group label {
                 min-width: auto;
             }
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 320px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -160px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #555 transparent transparent transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .tooltip .tooltiptext .warning {
+            color: #ffcc00;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -278,6 +364,7 @@
 
             <div class="example-files">
                 <h4>🚀 Quick Start - Download Example Files:</h4>
+                <p><strong>📱 For Abbott FreeStyle Libre CGM users:</strong> This tool helps you combine your LibreView glucose data with daily notes from messengers (Telegram, WhatsApp, etc.) to visualize how activities affect your glucose levels.</p>
                 <p>Try the app with sample data:</p>
                 <a href="example_glucose.csv" download class="download-link">📊 Example Glucose Data</a>
                 <a href="notes_example.csv" download class="download-link">📝 Example Notes Data</a>
@@ -343,23 +430,49 @@ timestamp;note;details
             </div>
         </div>
 
-        <div class="upload-section">
+        <div class="upload-section input-section" id="glucoseSection">
             <h2>Glucose Data (CSV)</h2>
-            <input type="file" id="glucoseFile" class="file-input" accept=".csv">
-            <label for="glucoseFile" class="file-label">Choose Glucose Data File</label>
-            <div id="glucoseFileName" class="file-name">No file chosen</div>
+            <div class="input-method-toggle">
+                <button type="button" class="input-method-btn active" data-method="file" data-target="glucose">📁 Upload File</button>
+                <button type="button" class="input-method-btn" data-method="paste" data-target="glucose">📋 Paste Text</button>
+            </div>
+            <div class="file-input-wrapper">
+                <input type="file" id="glucoseFile" class="file-input" accept=".csv">
+                <label for="glucoseFile" class="file-label">Choose Glucose Data File</label>
+                <div id="glucoseFileName" class="file-name">No file chosen</div>
+            </div>
+            <textarea id="glucoseText" class="csv-textarea" placeholder="Paste your glucose CSV data here...&#10;Example:&#10;Device,Serial Number,Device Timestamp,Record Type,Historic Glucose mmol/L,Scan Glucose mmol/L...&#10;FreeStyle Libre 3,0000-0000,29-06-2025 13:00,0,6.0,"></textarea>
         </div>
 
-        <div class="upload-section">
+        <div class="upload-section input-section" id="notesSection">
             <h2>Notes Data (CSV)</h2>
-            <input type="file" id="notesFile" class="file-input" accept=".csv">
-            <label for="notesFile" class="file-label">Choose Notes Data File</label>
-            <div id="notesFileName" class="file-name">No file chosen</div>
+            <div class="input-method-toggle">
+                <button type="button" class="input-method-btn active" data-method="file" data-target="notes">📁 Upload File</button>
+                <button type="button" class="input-method-btn" data-method="paste" data-target="notes">📋 Paste Text</button>
+            </div>
+            <div class="file-input-wrapper">
+                <input type="file" id="notesFile" class="file-input" accept=".csv">
+                <label for="notesFile" class="file-label">Choose Notes Data File</label>
+                <div id="notesFileName" class="file-name">No file chosen</div>
+            </div>
+            <textarea id="notesText" class="csv-textarea" placeholder="Paste your notes CSV data here...&#10;Example:&#10;timestamp;note;details&#10;29-06-2025 13:23;sport;Lifting 15 min, max power&#10;29-06-2025 13:45;lunch;complex meal"></textarea>
         </div>
 
         <button id="parseBtn" class="parse-btn" disabled>Parse Files</button>
 
-        <button id="downloadBtn" class="parse-btn" disabled style="background-color: #17a2b8; margin-left: 10px;">Download Joined CSV</button>
+        <div class="tooltip">
+            <button id="downloadBtn" class="parse-btn" disabled style="background-color: #17a2b8; margin-left: 10px;">Download Joined CSV</button>
+            <span class="tooltiptext">
+                <strong>📊 Export for External Analysis</strong><br>
+                Download your combined glucose + notes data for analysis with:<br>
+                • Excel, Google Sheets, or statistical tools<br>
+                • AI assistants (ChatGPT, Claude, etc.)<br>
+                • Custom data analysis scripts<br><br>
+                <span class="warning">⚠️ Important Warnings:</span><br>
+                • <strong>Privacy:</strong> AI tools receive your health data - use privacy-focused AI or remove personal details<br>
+                • <strong>Medical:</strong> AI can make mistakes with health analysis - never rely on AI for medical decisions, always consult healthcare professionals
+            </span>
+        </div>
 
         <div class="level-config">
             <button type="button" class="collapsible">⚙️ Configure Glucose Level Indicators</button>
@@ -410,7 +523,7 @@ timestamp;note;details
 
     <script src="app.js"></script>
     <script>
-        // Handle collapsible sections
+        // Handle collapsible sections and input method toggles
         document.addEventListener('DOMContentLoaded', function() {
             const collapsibles = document.getElementsByClassName('collapsible');
 
@@ -426,6 +539,27 @@ timestamp;note;details
                     }
                 });
             }
+
+            // Handle input method toggles
+            const methodBtns = document.querySelectorAll('.input-method-btn');
+            methodBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const method = this.dataset.method;
+                    const target = this.dataset.target;
+                    const section = document.getElementById(target + 'Section');
+
+                    // Update button states
+                    section.querySelectorAll('.input-method-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // Toggle section mode
+                    if (method === 'paste') {
+                        section.classList.add('paste-mode');
+                    } else {
+                        section.classList.remove('paste-mode');
+                    }
+                });
+            });
         });
     </script>
 </body>

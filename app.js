@@ -38,6 +38,13 @@ notesFileInput.addEventListener('change', handleFileSelect);
 parseBtn.addEventListener('click', handleParse);
 downloadBtn.addEventListener('click', handleDownload);
 
+// Text input elements
+const glucoseTextInput = document.getElementById('glucoseText');
+const notesTextInput = document.getElementById('notesText');
+
+glucoseTextInput.addEventListener('input', handleTextInput);
+notesTextInput.addEventListener('input', handleTextInput);
+
 // Level configuration elements
 const saveLevelsBtn = document.getElementById('saveLevelsBtn');
 const resetLevelsBtn = document.getElementById('resetLevelsBtn');
@@ -49,9 +56,11 @@ const hyperLevelInput = document.getElementById('hyperLevel');
 saveLevelsBtn.addEventListener('click', saveLevels);
 resetLevelsBtn.addEventListener('click', resetLevels);
 
-// Track selected files and parsed data
+// Track selected files/text and parsed data
 let glucoseFile = null;
 let notesFile = null;
+let glucoseText = null;
+let notesText = null;
 let joinedData = null;
 
 // Default glucose level settings (mmol/L)
@@ -90,8 +99,37 @@ function handleFileSelect(event) {
         }
     }
 
-    // Enable parse button only when both files are selected
-    if (glucoseFile && notesFile) {
+    // Enable parse button only when both data sources are available
+    updateParseButtonState();
+}
+
+function handleTextInput(event) {
+    const text = event.target.value.trim();
+
+    if (event.target.id === 'glucoseText') {
+        glucoseText = text || null;
+        if (text) {
+            glucoseFileName.textContent = 'Text data entered';
+        } else {
+            glucoseFileName.textContent = 'No text entered';
+        }
+    } else {
+        notesText = text || null;
+        if (text) {
+            notesFileName.textContent = 'Text data entered';
+        } else {
+            notesFileName.textContent = 'No text entered';
+        }
+    }
+
+    updateParseButtonState();
+}
+
+function updateParseButtonState() {
+    const hasGlucoseData = glucoseFile || glucoseText;
+    const hasNotesData = notesFile || notesText;
+
+    if (hasGlucoseData && hasNotesData) {
         parseBtn.disabled = false;
     } else {
         parseBtn.disabled = true;
@@ -99,16 +137,19 @@ function handleFileSelect(event) {
 }
 
 async function handleParse() {
-    if (!glucoseFile || !notesFile) return;
+    const hasGlucoseData = glucoseFile || glucoseText;
+    const hasNotesData = notesFile || notesText;
+
+    if (!hasGlucoseData || !hasNotesData) return;
 
     try {
         parseBtn.disabled = true;
         parseBtn.textContent = 'Parsing...';
 
-        // Parse both files in parallel
+        // Parse both data sources in parallel
         const [glucoseData, notesData] = await Promise.all([
-            parseGlucoseCSV(glucoseFile),
-            parseNotesCSV(notesFile)
+            glucoseFile ? parseGlucoseCSV(glucoseFile) : parseGlucoseText(glucoseText),
+            notesFile ? parseNotesCSV(notesFile) : parseNotesText(notesText)
         ]);
 
         // Join the data by timestamp
@@ -132,67 +173,72 @@ async function handleParse() {
     }
 }
 
+// Shared glucose parsing logic
+function parseGlucoseCSVText(csvText) {
+    const lines = csvText.split('\n');
+    const headers = lines[1].split(',').map(h => h.trim());
+    console.log("headers", headers.join('\n'));
+
+    const timestampIndex = headers.indexOf('Device Timestamp');
+
+    // Check for both mmol/L and mg/dL units
+    let historicGlucoseIndex = headers.indexOf('Historic Glucose mmol/L');
+    let scanGlucoseIndex = headers.indexOf('Scan Glucose mmol/L');
+    let isMgDl = false;
+
+    if (historicGlucoseIndex === -1 && scanGlucoseIndex === -1) {
+        // Try mg/dL units
+        historicGlucoseIndex = headers.indexOf('Historic Glucose mg/dL');
+        scanGlucoseIndex = headers.indexOf('Scan Glucose mg/dL');
+        isMgDl = true;
+    }
+
+    console.log("parsed indexes: ", timestampIndex, historicGlucoseIndex, scanGlucoseIndex, "isMgDl:", isMgDl);
+
+    if (timestampIndex === -1 || (historicGlucoseIndex === -1 && scanGlucoseIndex === -1)) {
+        throw new Error('Invalid CSV format for glucose data. Expected columns: Device Timestamp and either Historic/Scan Glucose in mmol/L or mg/dL');
+    }
+
+    // Deduplicate by timestamp, keeping the first Historic Glucose mmol/L if available
+    const resultMap = new Map();
+
+    for (let i = 2; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+
+        const values = lines[i].split(',').map(v => v.trim());
+        const timestampStr = values[timestampIndex];
+        if (!timestampStr) continue;
+        const timestamp = toDate(timestampStr);
+
+        // If already have a value for this timestamp, skip unless this is the first Historic Glucose
+        if (resultMap.has(timestamp.getTime())) continue;
+
+        let rate = null;
+        if (values[historicGlucoseIndex]) {
+            rate = parseFloat(values[historicGlucoseIndex]);
+        } else if (values[scanGlucoseIndex]) {
+            rate = parseFloat(values[scanGlucoseIndex]);
+        }
+        if (rate === null || isNaN(rate)) continue;
+
+        // Convert mg/dL to mmol/L if needed (mg/dL × 0.0555 = mmol/L)
+        if (isMgDl) {
+            rate = rate * 0.0555;
+        }
+
+        resultMap.set(timestamp.getTime(), new GlucoseRawData(timestamp, rate));
+    }
+
+    return Array.from(resultMap.values());
+}
+
 async function parseGlucoseCSV(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const csv = event.target.result;
-                const lines = csv.split('\n');
-                const headers = lines[1].split(',').map(h => h.trim());
-                console.log("headers", headers.join('\n'));
-
-                const timestampIndex = headers.indexOf('Device Timestamp');
-
-                // Check for both mmol/L and mg/dL units
-                let historicGlucoseIndex = headers.indexOf('Historic Glucose mmol/L');
-                let scanGlucoseIndex = headers.indexOf('Scan Glucose mmol/L');
-                let isMgDl = false;
-
-                if (historicGlucoseIndex === -1 && scanGlucoseIndex === -1) {
-                    // Try mg/dL units
-                    historicGlucoseIndex = headers.indexOf('Historic Glucose mg/dL');
-                    scanGlucoseIndex = headers.indexOf('Scan Glucose mg/dL');
-                    isMgDl = true;
-                }
-
-                console.log("parsed indexes: ", timestampIndex, historicGlucoseIndex, scanGlucoseIndex, "isMgDl:", isMgDl);
-
-                if (timestampIndex === -1 || (historicGlucoseIndex === -1 && scanGlucoseIndex === -1)) {
-                    throw new Error('Invalid CSV format for glucose data. Expected columns: Device Timestamp and either Historic/Scan Glucose in mmol/L or mg/dL');
-                }
-
-                // Deduplicate by timestamp, keeping the first Historic Glucose mmol/L if available
-                const resultMap = new Map();
-
-                for (let i = 2; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-
-                    const values = lines[i].split(',').map(v => v.trim());
-                    const timestampStr = values[timestampIndex];
-                    if (!timestampStr) continue;
-                    const timestamp = toDate(timestampStr);
-
-                    // If already have a value for this timestamp, skip unless this is the first Historic Glucose
-                    if (resultMap.has(timestamp.getTime())) continue;
-
-                    let rate = null;
-                    if (values[historicGlucoseIndex]) {
-                        rate = parseFloat(values[historicGlucoseIndex]);
-                    } else if (values[scanGlucoseIndex]) {
-                        rate = parseFloat(values[scanGlucoseIndex]);
-                    }
-                    if (rate === null || isNaN(rate)) continue;
-
-                    // Convert mg/dL to mmol/L if needed (mg/dL × 0.0555 = mmol/L)
-                    if (isMgDl) {
-                        rate = rate * 0.0555;
-                    }
-
-                    resultMap.set(timestamp.getTime(), new GlucoseRawData(timestamp, rate));
-                }
-
-                resolve(Array.from(resultMap.values()));
+                const csvText = event.target.result;
+                resolve(parseGlucoseCSVText(csvText));
             } catch (error) {
                 reject(error);
             }
@@ -202,42 +248,47 @@ async function parseGlucoseCSV(file) {
     });
 }
 
+// Shared notes parsing logic
+function parseNotesCSVText(csvText) {
+    const lines = csvText.split('\n');
+    const headers = lines[0].split(';').map(h => h.trim());
+    console.log("notes headers", headers.join('\n'));
+
+    const timestampIndex = headers.indexOf('timestamp');
+    const noteIndex = headers.indexOf('note');
+    const detailsIndex = headers.indexOf('details');
+    console.log("parsed indexes: ", timestampIndex, noteIndex, detailsIndex);
+
+    if (timestampIndex === -1 || noteIndex === -1 || detailsIndex === -1) {
+        throw new Error('Invalid CSV format for notes data');
+    }
+
+    const result = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+
+        // Handle quoted values that might contain semicolons
+        const values = lines[i].match(/[^;]+|([^;]*"[^"]*"[^;]*)/g) || [];
+        const timestamp = values[timestampIndex]?.trim();
+        const note = values[noteIndex]?.trim();
+        const details = values[detailsIndex]?.trim();
+
+        if (timestamp && (note || details)) {
+            result.push(new NoteData(toDate(timestamp), note, details));
+        }
+    }
+
+    return result;
+}
+
 async function parseNotesCSV(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const csv = event.target.result;
-                const lines = csv.split('\n');
-                const headers = lines[0].split(';').map(h => h.trim());
-                console.log("notes headers", headers.join('\n'));
-
-                const timestampIndex = headers.indexOf('timestamp');
-                const noteIndex = headers.indexOf('note');
-                const detailsIndex = headers.indexOf('details');
-                console.log("parsed indexes: ", timestampIndex, noteIndex, detailsIndex);
-
-                if (timestampIndex === -1 || noteIndex === -1 || detailsIndex === -1) {
-                    throw new Error('Invalid CSV format for notes data');
-                }
-
-                const result = [];
-
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-
-                    // Handle quoted values that might contain semicolons
-                    const values = lines[i].match(/[^;]+|([^;]*"[^"]*"[^;]*)/g) || [];
-                    const timestamp = values[timestampIndex]?.trim();
-                    const note = values[noteIndex]?.trim();
-                    const details = values[detailsIndex]?.trim();
-
-                    if (timestamp && (note || details)) {
-                        result.push(new NoteData(toDate(timestamp), note, details));
-                    }
-                }
-
-                resolve(result);
+                const csvText = event.target.result;
+                resolve(parseNotesCSVText(csvText));
             } catch (error) {
                 reject(error);
             }
@@ -292,7 +343,7 @@ function renderChart(data) {
 
     const chart = LightweightCharts.createChart(chartElement, {
         width: chartElement.clientWidth,
-        height: 500,
+        height: chartElement.clientHeight - 50, // Account for title space
         layout: {
             backgroundColor: '#ffffff',
             textColor: '#333',
@@ -619,6 +670,27 @@ function updateLevelInputs() {
     targetLevelInput.value = currentLevels.target.toFixed(1);
     mediumLevelInput.value = currentLevels.medium.toFixed(1);
     hyperLevelInput.value = currentLevels.hyper.toFixed(1);
+}
+
+// Text parsing functions (using shared logic)
+function parseGlucoseText(csvText) {
+    return new Promise((resolve, reject) => {
+        try {
+            resolve(parseGlucoseCSVText(csvText));
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+function parseNotesText(csvText) {
+    return new Promise((resolve, reject) => {
+        try {
+            resolve(parseNotesCSVText(csvText));
+        } catch (error) {
+            reject(error);
+        }
+    });
 }
 
 // Initialize levels on page load
