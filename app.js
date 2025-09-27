@@ -386,11 +386,6 @@ function renderChart(data) {
             value: item.glucoseRate,
         }));
 
-    chartData.forEach(item => {
-        console.log("item", item);
-        console.log(item.time);
-    });
-
     // Set the data
     glucoseSeries.setData(chartData);
 
@@ -404,12 +399,6 @@ function renderChart(data) {
             shape: 'arrowUp',
             text: item.note || 'Note',
         }));
-
-    markers.forEach(item => {
-        console.log("item", item);
-        console.log(item.time);
-    });
-
 
     glucoseSeries.setMarkers(markers);
 
